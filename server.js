@@ -16,9 +16,7 @@ app.use(cookieParser())
 
 // Configuração do CORS
 const corsOptions = {
-  origin: function (origin, callback) {
-    callback(null, true)
-  },
+  origin: 'https://api-sopost.onrender.com', // Substitua com a URL do seu aplicativo Render
   methods: ['POST', 'GET', 'DELETE', 'PUT'], // Métodos permitidos
   credentials: true, // Permitir envio de cookies
   allowedHeaders: ['Content-Type', 'Authorization'] // Cabeçalhos permitidos
@@ -108,7 +106,9 @@ app.post('/login', (req, res) => {
         // Armazenar o token em um cookie
         res.cookie('token', token, {
           httpOnly: true,
-          maxAge: 24 * 60 * 60 * 1000 // 24 horas
+          maxAge: 24 * 60 * 60 * 1000, // 24 horas
+          sameSite: 'None', // Permitir envio do cookie para outros domínios
+          secure: true // Requer conexão HTTPS segura
         })
 
         res.json('Usuario Logado')

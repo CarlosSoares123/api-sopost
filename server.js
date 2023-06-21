@@ -16,7 +16,9 @@ app.use(cookieParser())
 
 // Configuração do CORS
 const corsOptions = {
-  origin: 'https://api-sopost.onrender.com', // Substitua com a URL do seu aplicativo Render
+  origin: function (origin, callback) {
+    callback(null, true)
+  },
   methods: ['POST', 'GET', 'DELETE', 'PUT'], // Métodos permitidos
   credentials: true, // Permitir envio de cookies
   allowedHeaders: ['Content-Type', 'Authorization'] // Cabeçalhos permitidos

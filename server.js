@@ -59,7 +59,7 @@ const db = mysql.createConnection({
 
 db.connect(err => {
   if (err) {
-    console.log('Erro ao conectar com o banco de dados: ', err)
+    console.log('Carlos Erro ao conectar com o banco de dados: ', err)
   } else {
     console.log('Conectado com o banco de dados ')
   }

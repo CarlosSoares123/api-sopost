@@ -39,8 +39,7 @@ const storage = multer.diskStorage({
     cb(null, 'uploads/') // Define o diretório onde os arquivos serão armazenados
   },
   filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9)
-    cb(null, uniqueSuffix + path.extname(file.originalname)) // Define o nome do arquivo no disco
+    cb(null, file.originalname) // Define o nome do arquivo no disco
   }
 })
 
@@ -60,7 +59,7 @@ const db = mysql.createConnection({
 
 db.connect(err => {
   if (err) {
-    console.log('Erro ao conectar com o banco de dados: ', err)
+    console.log('Carlos Erro ao conectar com o banco de dados: ', err)
   } else {
     console.log('Conectado com o banco de dados ')
   }
@@ -71,7 +70,7 @@ process.on('SIGINT', () => {
   process.exit()
 })
 
-// Rota de login de usuário
+// Rota de login de user
 app.post('/login', (req, res) => {
   const { email, password } = req.body
 
@@ -94,111 +93,246 @@ app.post('/login', (req, res) => {
 
     if (password) {
       // Verificar a senha
-      bcrypt.compare(password, userPassword, (bcryptErr, bcryptResult) => {
-        if (bcryptErr) {
-          console.log('Erro ao comparar as senhas:', bcryptErr)
-          return res.status(500).json({ error: 'Erro interno do servidor' })
+      bcrypt.compare(password, userPassword, (err, isMatch) => {
+        if (err) {
+          console.log('Erro ao comparar as senhas:', err)
+          res.status(500).json({ error: 'Erro interno do servidor' })
+          return
         }
-
-        if (bcryptResult) {
-          // Senha correta, gerar token de autenticação
-          const token = jwt.sign({ userId }, 'secret_key', { expiresIn: '1h' })
-
-          // Enviar token como cookie
-          res.cookie('token', token, { httpOnly: true })
-          res.status(200).json({ message: 'Login bem-sucedido' })
-        } else {
-          // Senha incorreta
-          res.status(401).json({ message: 'Senha incorreta' })
+        if (!isMatch) {
+          res.status(401).json({ error: 'Senha Invalida' })
+          return
         }
+        // Gerar um token JWT
+        const token = jwt.sign({ id: userId }, 'jsonwebtoken-carlos-soares')
+        // Armazenar o token em um cookie
+        res.cookie('token', token, {
+          httpOnly: true,
+          maxAge: 24 * 60 * 60 * 1000, // 24 horas
+          sameSite: 'None', // Permitir envio do cookie para outros domínios
+          secure: true // Requer conexão HTTPS segura
+        })
+
+        res.json('Usuario Logado')
       })
     } else {
-      // Senha não fornecida
-      res.status(400).json({ message: 'A senha não foi fornecida' })
+      const { name, image } = data[0]
+      res.json({ name, image })
     }
   })
 })
-
-// Rota de registro de usuário
+// Rota para Logout
+app.get('/logout', (req, res) => {
+  // Rota GET para o endpoint "/logout" para realizar o logout do usuário
+  res.clearCookie('token') // Limpa o cookie contendo o token de autenticação
+  return res.json({ Status: 'Success' }) // Retorna uma resposta JSON indicando o status de sucesso
+})
+// Rota de Registro de user
 app.post('/register', upload.single('image'), (req, res) => {
-  const { name, email, password } = req.body
-  const image = req.file.filename // Utiliza o novo nome gerado para a imagem
+  const { email, name, surname, password } = req.body
+  const image = req.file.filename // Obtém o nome do arquivo enviado através do upload
 
-  // Verificar se o usuário já está registrado
-  const checkUserSql = 'SELECT * FROM users WHERE email = ?'
-
-  db.query(checkUserSql, [email], (err, data) => {
+  const existName = 'SELECT * FROM users WHERE name = ?'
+  db.query(existName, [name], async (err, data) => {
     if (err) {
-      console.log('Erro ao verificar o usuário:', err)
+      console.error('Erro ao executar a consulta: ', err)
       return res.status(500).json({ error: 'Erro interno do servidor' })
     }
     if (data.length > 0) {
-      // Usuário já registrado
-      res.status(409).json({ message: 'Usuário já registrado' })
-    } else {
-      // Registrar o usuário no banco de dados
-      bcrypt.hash(password, 10, (hashErr, hashedPassword) => {
-        if (hashErr) {
-          console.log('Erro ao gerar o hash da senha:', hashErr)
+      return res.status(409).json({ error: 'Nome de usuário já está em uso' })
+    }
+
+    const existEmail = 'SELECT * FROM users WHERE email = ?'
+    db.query(existEmail, [email], (err, data) => {
+      if (err) {
+        console.error('Erro ao executar a consulta: ', err)
+        return res.status(500).json({ error: 'Erro interno do servidor' })
+      }
+      if (data.length > 0) {
+        return res.status(409).json({ error: 'Este Email já está em uso' })
+      }
+
+      // Hash da Senha
+      bcrypt.hash(password, 10, (err, hashedPassword) => {
+        if (err) {
+          console.log('Erro ao gerar o hash da senha: ', err)
           return res.status(500).json({ error: 'Erro interno do servidor' })
         }
 
-        const insertUserSql =
-          'INSERT INTO users (name, email, password, image) VALUES (?, ?, ?, ?)'
-
+        // Inserir usuário no banco de dados
+        const insertUser =
+          'INSERT INTO users (name, surname, email, image, password) VALUES (?, ?, ?, ?, ?)'
         db.query(
-          insertUserSql,
-          [name, email, hashedPassword, image],
-          insertErr => {
-            if (insertErr) {
-              console.log('Erro ao inserir o usuário:', insertErr)
+          insertUser,
+          [name, surname, email, image, hashedPassword],
+          (err, data) => {
+            if (err) {
+              console.log('Erro ao registrar o usuário: ', err)
               return res.status(500).json({ error: 'Erro interno do servidor' })
             }
-            res.status(201).json({ message: 'Usuário registrado com sucesso' })
+            return res
+              .status(201)
+              .json({ message: 'Usuário registrado com sucesso' })
           }
         )
       })
-    }
+    })
   })
 })
 
-// Rota para obter informações do usuário
-app.get('/user', (req, res) => {
+app.get('/home', (req, res) => {
+  // Verificar se o usuário está autenticado
   const token = req.cookies.token
-
   if (!token) {
-    return res.status(401).json({ message: 'Não autenticado' })
+    res.status(401).json({ message: 'Acesso não autorizado' })
+    return
   }
 
   try {
-    const decodedToken = jwt.verify(token, 'secret_key')
-    const userId = decodedToken.userId
+    // Verificar a validade do token
+    const decoded = jwt.verify(token, 'jsonwebtoken-carlos-soares')
+    const userId = decoded.id
 
-    const sql = 'SELECT id, name, email, image FROM users WHERE id = ?'
-
+    // Obter os dados do usuário, incluindo a imagem, do banco de dados
+    const sql = 'SELECT * FROM users WHERE id = ?'
     db.query(sql, [userId], (err, data) => {
       if (err) {
-        console.log('Erro ao obter informações do usuário:', err)
+        console.log('Erro ao buscar o usuário:', err)
         return res.status(500).json({ error: 'Erro interno do servidor' })
       }
+
+      // Verificar se o usuário existe
       if (data.length === 0) {
-        return res.status(404).json({ message: 'Usuário não encontrado' })
+        res.status(404).json({ message: 'Usuário não encontrado' })
+        return
       }
 
-      const user = {
-        id: data[0].id,
-        name: data[0].name,
-        email: data[0].email,
-        image: data[0].image
-      }
+      const user = data[0]
 
-      res.status(200).json({ user })
+      // Retornar os dados do usuário, incluindo a imagem
+      res.json(user)
     })
-  } catch (error) {
-    return res.status(401).json({ message: 'Token inválido' })
+  } catch (err) {
+    console.log('Erro ao verificar o token:', err)
+    res.status(401).json({ message: 'Acesso não autorizado' })
   }
 })
 
+//Middleware de autenticação
+function authenticate(req, res, next) {
+  const token = req.cookies.token
+
+  if (!token) {
+    res.status(401).json({ error: 'Acesso não autorizado' })
+    return
+  }
+
+  //Verificar e decodificar o token JWT
+  jwt.verify(token, 'jsonwebtoken-carlos-soares', (err, decoded) => {
+    if (err) {
+      console.log('Erro ao verificar o token: ', err)
+      res.status(500).json({ error: 'Erro interno do servidor' })
+      return
+    }
+
+    req.userId = decoded.id
+    next()
+  })
+}
+
+// Rota para criar um Postagem
+app.post('/posts', authenticate, (req, res) => {
+  const { text } = req.body
+  const userId = req.userId
+
+  //Inserir a postagem no banco de dados
+  const sql = 'INSERT INTO posts (text, userId) VALUES ( ?, ?)'
+  db.query(sql, [text, userId], (err, data) => {
+    if (err) {
+      console.log('Erro ao criar a postagem: ', err)
+      res.status(500).json({ error: 'Erro interno do servidor' })
+      return
+    }
+
+    res.status(201).json({ message: 'Postagem criada com sucesso' })
+  })
+})
+// Rota para mostrar as Postagens
+app.get('/posts', (req, res) => {
+  // Buscar as postagens e informações do usuário do banco de dados
+  const sql =
+    'SELECT posts.id, posts.text, users.name, users.surname, users.email, users.image FROM posts JOIN users ON posts.userId = users.id'
+  db.query(sql, (err, data) => {
+    if (err) {
+      console.log('Erro ao buscar as postagens:', err)
+      res.status(500).json({ error: 'Erro interno do servidor' })
+      return
+    }
+
+    res.json({ data })
+  })
+})
+
+app.get('/', authenticate, (req, res) => {
+  // Rota GET para a raiz do aplicativo, usando o middleware "verifyUser" para autenticação
+  return res.json({ Status: 'Success', userId: req.UserId }) // Retorna uma resposta JSON com o status de sucesso e o nome do usuário autenticado
+})
+
+app.get('/posts_user', authenticate, (req, res) => {
+  const userId = req.userId
+
+  // Buscar as postagens do usuário com os dados do usuário relacionados
+  const sql = `
+    SELECT posts.*, users.name, users.surname, users.email, users.image
+    FROM posts
+    JOIN users ON posts.userId = users.id
+    WHERE posts.userId = ?
+  `
+  db.query(sql, [userId], (err, data) => {
+    if (err) {
+      console.log('Erro ao buscar as postagens:', err)
+      res.status(500).json({ error: 'Erro interno do servidor' })
+      return
+    }
+
+    res.json({
+      data
+    })
+  })
+})
+
+app.put('/posts/:id', authenticate, (req, res) => {
+  const postId = req.params.id
+  const { text } = req.body
+
+  // Atualizar os dados do post no banco de dados
+  const sql = 'UPDATE posts SET text = ? WHERE id = ?'
+  db.query(sql, [text, postId], (err, data) => {
+    if (err) {
+      console.log('Erro ao atualizar os dados do post:', err)
+      res.status(500).json({ error: 'Erro interno do servidor' })
+      return
+    }
+
+    res.json({ message: 'Dados do post atualizados com sucesso' })
+  })
+})
+
+app.delete('/posts/:id', authenticate, (req, res) => {
+  const postId = req.params.id
+
+  // Excluir o post do banc\o de dados
+  const sql = 'DELETE FROM posts WHERE id = ?'
+  db.query(sql, [postId], (err, data) => {
+    if (err) {
+      console.log('Erro ao excluir o post:', err)
+      res.status(500).json({ error: 'Erro interno do servidor' })
+      return
+    }
+    res.json({ message: 'Post excluído com sucesso' })
+  })
+})
+// Inicialização do Servidor na Porta 8080
 app.listen(PORT, () => {
-  console.log(`Servidor iniciado na porta ${PORT}`)
+  console.log(`Servidor Rodando na Porta ${PORT}`)
 })

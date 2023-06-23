@@ -31,20 +31,22 @@ app.use(bodyParser.urlencoded({ extended: false }))
 app.use(bodyParser.json())
 
 // Configuração do diretório de uploads como arquivos estáticos
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')))
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Configuração do Multer para upload de arquivos
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    cb(null, 'uploads/') // Define o diretório onde os arquivos serão armazenados
+    cb(null, 'uploads/'); // Define o diretório onde os arquivos serão armazenados
   },
   filename: function (req, file, cb) {
-    cb(null, file.originalname) // Define o nome do arquivo no disco
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    const ext = path.extname(file.originalname);
+    const filename = req.body.filename + uniqueSuffix + ext; // Renomeia o arquivo com o nome personalizado fornecido pelo usuário
+    cb(null, filename); // Define o nome do arquivo no disco
   }
-})
+});
 
-const upload = multer({ storage: storage }) // Configura o middleware Multer para lidar com o upload
-
+const upload = multer({ storage: storage }); // Configura o middleware Multer para lidar com o upload
 // Conexão com o banco de dados
 const db = mysql.createConnection({
   host: 'containers-us-west-178.railway.app',
